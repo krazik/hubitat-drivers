@@ -58,7 +58,7 @@ metadata {
     }
 
     preferences {
-        input name: "logEnable",  type: "bool", title: "Enable debug logging", defaultValue: false
+        input name: "logEnable",  type: "bool", title: "Enable debug logging", defaultValue: true
         input name: "txtEnable",  type: "bool", title: "Enable info logging",  defaultValue: true
         input name: "healthCheckInterval", type: "enum", title: "Health check interval",
               options: ["10": "10 minutes", "30": "30 minutes", "60": "1 hour"], defaultValue: "60"
@@ -152,26 +152,23 @@ void parseOnOffCluster(Map descMap) {
 }
 
 void parseMultistateCluster(Map descMap) {
-    // Cluster 0x0012 attr 0x0055 carries button action value on some Aqara firmwares
     if (descMap.attrId != "0055" || descMap.value == null) return
 
-    String ep = descMap.sourceEndpoint ?: descMap.endpoint ?: "01"
-    Integer endpointInt = Integer.parseInt(ep, 16)
-    Integer buttonNumber = (endpointInt == 0x03) ? 3 : 1
+    String endpoint = descMap.sourceEndpoint ?: descMap.endpoint
+    Integer buttonNum = (endpoint == "01") ? 1 : (endpoint == "02" ? 2 : 3)
 
     Integer actionValue = Integer.parseInt(descMap.value, 16)
     String action
     switch (actionValue) {
+        case 0:   action = "released";     break
         case 1:   action = "pushed";       break
         case 2:   action = "doubleTapped"; break
         case 255: action = "held";         break
-        default:
-            logDebug "Unhandled multistate value: ${actionValue} on endpoint ${ep}"
-            return
+        default:  action = "pushed"
     }
 
-    logTxt "Button ${buttonNumber} ${action} (multistate)"
-    sendEvent(name: action, value: buttonNumber, isStateChange: true, type: "physical")
+    logTxt "Button ${buttonNum} ${action}"
+    sendEvent(name: action, value: buttonNum, isStateChange: true, type: "physical")
 }
 
 // ==================== HEALTH CHECK ====================
