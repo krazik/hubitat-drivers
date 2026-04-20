@@ -48,7 +48,7 @@
 import hubitat.helper.HexUtils
 import groovy.transform.Field
 
-@Field static final String VERSION     = "1.0.5"
+@Field static final String VERSION     = "1.0.6"
 @Field static final String DRIVER_NAME = "Aqara H2 US 2-Button Switch"
 
 @Field static final Integer CLUSTER_ON_OFF    = 0x0006
@@ -143,7 +143,7 @@ List<String> setBottomLED(String mode) {
     Integer value = mode == "on" ? 0x02 : (mode == "off" ? 0x01 : 0x00)
     logTxt "Setting bottom LED to ${mode}"
     sendEvent(name: "bottomLED", value: mode)
-    return ["he wattr 0x${device.deviceNetworkId} 0x03 0xFCC0 0x0203 0x20 {${intToHex(value,1)}} {0x115F}"]
+    return ["he wattr 0x${device.deviceNetworkId} 0x03 0xFCC0 0x0203 0x20 {${intToHex(value,1)}} {115F}"]
 }
 
 List<String> on() {
