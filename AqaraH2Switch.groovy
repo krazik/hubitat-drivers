@@ -103,12 +103,12 @@ List<String> refresh() {
 
 List<String> on() {
     logTxt "Turning on"
-    return zigbee.on()
+    return ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0x01 {}"]
 }
 
 List<String> off() {
     logTxt "Turning off"
-    return zigbee.off()
+    return ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0x00 {}"]
 }
 
 // ==================== PARSE ====================
@@ -144,41 +144,11 @@ void parse(String description) {
 }
 
 void parseOnOffCluster(Map descMap) {
-    // Attribute report → relay state
     if (descMap.attrId == "0000" && descMap.value != null) {
         String value = (descMap.value == "01") ? "on" : "off"
         logTxt "Switch is ${value}"
         sendEvent(name: "switch", value: value, type: "physical")
-        return
     }
-
-    // Catchall command → button event
-    if (descMap.command != null && descMap.attrId == null) {
-        parseOnOffButtonEvent(descMap)
-    }
-}
-
-void parseOnOffButtonEvent(Map descMap) {
-    String ep = descMap.sourceEndpoint ?: descMap.endpoint ?: "01"
-    Integer endpointInt = Integer.parseInt(ep, 16)
-    Integer buttonNumber = (endpointInt == 0x03) ? 3 : 1
-
-    Integer commandInt = descMap.commandInt != null
-        ? descMap.commandInt
-        : Integer.parseInt(descMap.command ?: "0", 16)
-
-    String action
-    switch (commandInt) {
-        case 0x01: action = "pushed";      break
-        case 0xFD: action = "held";        break
-        case 0x02: action = "doubleTapped"; break
-        default:
-            logDebug "Unhandled button command: 0x${String.format('%02X', commandInt)} on endpoint 0x${String.format('%02X', endpointInt)}"
-            return
-    }
-
-    logTxt "Button ${buttonNumber} ${action}"
-    sendEvent(name: action, value: buttonNumber, isStateChange: true, type: "physical")
 }
 
 void parseMultistateCluster(Map descMap) {
