@@ -48,11 +48,13 @@
 import hubitat.helper.HexUtils
 import groovy.transform.Field
 
-@Field static final String VERSION     = "1.0.8"
+@Field static final String VERSION     = "1.0.9"
 @Field static final String DRIVER_NAME = "Aqara H2 US 2-Button Switch"
 
 @Field static final Integer CLUSTER_ON_OFF    = 0x0006
 @Field static final Integer CLUSTER_MULTISTATE = 0x0012
+@Field static final Integer CLUSTER_AQARA     = 0xFCC0
+@Field static final String  MFR_AQARA         = "115F"
 
 metadata {
     definition(
@@ -133,7 +135,11 @@ List<String> configure() {
 
 List<String> refresh() {
     logTxt "Refreshing"
-    return zigbee.readAttribute(CLUSTER_ON_OFF, 0x0000)
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(CLUSTER_ON_OFF, 0x0000)
+    cmds += "he rattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0x0203 {${MFR_AQARA}}"
+    cmds += "he rattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0x00F0 {${MFR_AQARA}}"
+    return cmds
 }
 
 // ==================== COMMANDS ====================
@@ -144,16 +150,16 @@ List<String> setLEDDisabledNight(String disabled) {
     String val = (disabled == "true") ? "01" : "00"
     logTxt "Setting LED disabled-at-night to ${disabled}"
     sendEvent(name: "ledDisabledNight", value: disabled)
-    return ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0x0203 0x10 {${val}} {115F}"]
+    return ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0x0203 0x10 {${val}} {${MFR_AQARA}}"]
 }
 
 List<String> setFlipIndicator(String flip) {
     // FCC0 attr 0x00F0 (uint8): flip LED logic — LED on when relay OFF, and vice versa
-    // true = flipped, false = normal (LED on when relay on)
+    // true = flipped (LED lit when load is off), false = normal (LED lit when load is on)
     String val = (flip == "true") ? "01" : "00"
     logTxt "Setting flip indicator to ${flip}"
     sendEvent(name: "flipIndicator", value: flip)
-    return ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0x00F0 0x20 {${val}} {115F}"]
+    return ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0x00F0 0x20 {${val}} {${MFR_AQARA}}"]
 }
 
 List<String> on() {
@@ -206,6 +212,9 @@ void parse(String description) {
         case CLUSTER_MULTISTATE:
             parseMultistateCluster(descMap)
             break
+        case CLUSTER_AQARA:
+            parseAqaraCluster(descMap)
+            break
         default:
             logDebug "Unhandled cluster: 0x${String.format('%04X', clusterInt)}"
     }
@@ -237,6 +246,25 @@ void parseMultistateCluster(Map descMap) {
 
     logTxt "Button ${buttonNum} ${action}"
     sendEvent(name: action, value: buttonNum, isStateChange: true, type: "physical")
+}
+
+void parseAqaraCluster(Map descMap) {
+    if (descMap.attrId == null || descMap.value == null) return
+    switch (descMap.attrId) {
+        case "0203":
+            String val = (descMap.value == "01") ? "true" : "false"
+            logDebug "LED disabled at night: ${val}"
+            sendEvent(name: "ledDisabledNight", value: val)
+            break
+        case "00f0":
+        case "00F0":
+            String val = (descMap.value == "01") ? "true" : "false"
+            logDebug "Flip indicator: ${val}"
+            sendEvent(name: "flipIndicator", value: val)
+            break
+        default:
+            logDebug "Unhandled Aqara attr: ${descMap.attrId} = ${descMap.value}"
+    }
 }
 
 // ==================== HEALTH CHECK ====================
