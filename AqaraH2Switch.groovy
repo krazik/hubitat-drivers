@@ -48,7 +48,7 @@
 import hubitat.helper.HexUtils
 import groovy.transform.Field
 
-@Field static final String VERSION     = "1.0.7"
+@Field static final String VERSION     = "1.0.8"
 @Field static final String DRIVER_NAME = "Aqara H2 US 2-Button Switch"
 
 @Field static final Integer CLUSTER_ON_OFF    = 0x0006
@@ -74,8 +74,12 @@ metadata {
         attribute "driverVersion",   "string"
         attribute "healthStatus",    "enum", ["online", "offline"]
 
-        command "setBottomLED", [[name:"mode", type:"ENUM", constraints:["on","off","relay"]]]
-        attribute "bottomLED", "string"
+        // LED control applies to the top button (relay endpoint 01) only.
+        // The wireless bottom button LED is not independently controllable on agl004.
+        command "setLEDDisabledNight", [[name:"disabled", type:"ENUM", constraints:["true","false"]]]
+        command "setFlipIndicator",    [[name:"flip",     type:"ENUM", constraints:["true","false"]]]
+        attribute "ledDisabledNight", "string"
+        attribute "flipIndicator",    "string"
 
         fingerprint profileId: "0104", endpointId: "01",
                     inClusters: "0000,0003,0004,0005,0006,000A,0012,0B05,FCC0",
@@ -134,15 +138,22 @@ List<String> refresh() {
 
 // ==================== COMMANDS ====================
 
-List<String> setBottomLED(String mode) {
-    // Controls bottom button LED via Aqara FCC0 cluster, endpoint 03
-    // mode "on"    = LED always on   (value 0x02)
-    // mode "off"   = LED always off  (value 0x01)
-    // mode "relay" = follows relay   (value 0x00) - may not work without relay
-    Integer value = mode == "on" ? 0x02 : (mode == "off" ? 0x01 : 0x00)
-    logTxt "Setting bottom LED to ${mode}"
-    sendEvent(name: "bottomLED", value: mode)
-    return ["he wattr 0x${device.deviceNetworkId} 0x03 0xFCC0 0x0203 0x20 {${intToHex(value,1)}} {115F}"]
+List<String> setLEDDisabledNight(String disabled) {
+    // FCC0 attr 0x0203 (bool): disable the top button LED at night
+    // true = LED off at night, false = LED always follows relay state
+    String val = (disabled == "true") ? "01" : "00"
+    logTxt "Setting LED disabled-at-night to ${disabled}"
+    sendEvent(name: "ledDisabledNight", value: disabled)
+    return ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0x0203 0x10 {${val}} {115F}"]
+}
+
+List<String> setFlipIndicator(String flip) {
+    // FCC0 attr 0x00F0 (uint8): flip LED logic — LED on when relay OFF, and vice versa
+    // true = flipped, false = normal (LED on when relay on)
+    String val = (flip == "true") ? "01" : "00"
+    logTxt "Setting flip indicator to ${flip}"
+    sendEvent(name: "flipIndicator", value: flip)
+    return ["he wattr 0x${device.deviceNetworkId} 0x01 0xFCC0 0x00F0 0x20 {${val}} {115F}"]
 }
 
 List<String> on() {
