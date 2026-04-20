@@ -4,12 +4,43 @@
  *  Supports: lumi.switch.agl004, lumi.switch.agl009
  *  Tested with: H2 US 2-Button 1-Channel (lumi.switch.agl004)
  *
- *  Button mapping (verified on hardware):
- *    Top button    → Button 1 (endpoint 01)
- *    Bottom button → Button 3 (endpoint 03)
- *
  *  Based on prestonbrown/hubitat-drivers (AqaraZigbeeDimmer.groovy)
  *  https://github.com/prestonbrown/hubitat-drivers
+ *
+ *  ── How this driver works ───────────────────────────────────────────────────
+ *
+ *  The device exposes two separate Zigbee endpoints:
+ *    Endpoint 01 → top button    (also controls the physical relay)
+ *    Endpoint 03 → bottom button (no relay — buttons only)
+ *
+ *  Button press events arrive on Zigbee cluster 0x0012 (Multistate Input),
+ *  attribute 0x0055. The endpoint tells us which button; the value tells us
+ *  the action:  1 = pushed,  2 = doubleTapped,  255 = held
+ *
+ *  The relay (switch on/off) is reported separately on cluster 0x0006.
+ *  Note: the bottom button does NOT have a relay — only the top button does.
+ *
+ *  ── Button numbers & how to automate them ───────────────────────────────────
+ *
+ *  Button 1 = top button     → pushed / held / doubleTapped
+ *  Button 3 = bottom button  → pushed / held / doubleTapped
+ *  (Button 2 is unused — the hardware skips it)
+ *
+ *  In Rule Machine or Button Controller, trigger on:
+ *    "Button 1 pushed"   → top button single press
+ *    "Button 1 held"     → top button press-and-hold
+ *    "Button 1 doubleTapped" → top button double press
+ *    "Button 3 pushed"   → bottom button single press
+ *    "Button 3 held"     → bottom button press-and-hold
+ *    "Button 3 doubleTapped" → bottom button double press
+ *
+ *  ── Child devices ───────────────────────────────────────────────────────────
+ *
+ *  This driver intentionally creates NO child devices. All button events and
+ *  the switch state are reported on the parent device. If Hubitat created child
+ *  devices before you assigned this driver, they can be safely deleted.
+ *
+ *  ────────────────────────────────────────────────────────────────────────────
  *
  *  Licensed under the Apache License, Version 2.0
  */
@@ -17,7 +48,7 @@
 import hubitat.helper.HexUtils
 import groovy.transform.Field
 
-@Field static final String VERSION     = "1.0.3"
+@Field static final String VERSION     = "1.0.4"
 @Field static final String DRIVER_NAME = "Aqara H2 US 2-Button Switch"
 
 @Field static final Integer CLUSTER_ON_OFF    = 0x0006
