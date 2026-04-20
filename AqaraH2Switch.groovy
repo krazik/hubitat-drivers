@@ -48,7 +48,7 @@
 import hubitat.helper.HexUtils
 import groovy.transform.Field
 
-@Field static final String VERSION     = "1.0.6"
+@Field static final String VERSION     = "1.0.7"
 @Field static final String DRIVER_NAME = "Aqara H2 US 2-Button Switch"
 
 @Field static final Integer CLUSTER_ON_OFF    = 0x0006
@@ -73,7 +73,6 @@ metadata {
         attribute "numberOfButtons", "number"
         attribute "driverVersion",   "string"
         attribute "healthStatus",    "enum", ["online", "offline"]
-        attribute "lastCheckin",     "string"
 
         command "setBottomLED", [[name:"mode", type:"ENUM", constraints:["on","off","relay"]]]
         attribute "bottomLED", "string"
@@ -156,11 +155,24 @@ List<String> off() {
     return ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0x00 {}"]
 }
 
+void push(buttonNumber) {
+    logTxt "Button ${buttonNumber} pushed (digital)"
+    sendEvent(name: "pushed", value: buttonNumber as Integer, isStateChange: true, type: "digital")
+}
+
+void hold(buttonNumber) {
+    logTxt "Button ${buttonNumber} held (digital)"
+    sendEvent(name: "held", value: buttonNumber as Integer, isStateChange: true, type: "digital")
+}
+
+void doubleTap(buttonNumber) {
+    logTxt "Button ${buttonNumber} doubleTapped (digital)"
+    sendEvent(name: "doubleTapped", value: buttonNumber as Integer, isStateChange: true, type: "digital")
+}
+
 // ==================== PARSE ====================
 
 void parse(String description) {
-    checkHealth()
-
     Map descMap
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
@@ -228,24 +240,23 @@ void scheduleHealthCheck() {
 }
 
 void healthCheck() {
-    String lastCheckin = device.currentValue("lastCheckin")
-    if (!lastCheckin) return
+    // Uses Hubitat's built-in lastActivity (updated automatically on any Zigbee message)
+    def lastActivity = device.lastActivity
+    if (!lastActivity) return
 
-    Date lastDate = Date.parse("yyyy-MM-dd HH:mm:ss", lastCheckin)
-    Integer elapsed = ((now() - lastDate.time) / 1000).intValue()
+    Integer elapsed = ((now() - lastActivity.time) / 1000).intValue()
     Integer timeout = ((healthCheckInterval ?: "60") as Integer) * 2 * 60
 
-    if (elapsed > timeout && device.currentValue("healthStatus") != "offline") {
-        sendEvent(name: "healthStatus", value: "offline")
-        log.warn "${device.displayName}: Device offline (no response for ${elapsed}s)"
-    }
-}
-
-void checkHealth() {
-    sendEvent(name: "lastCheckin", value: new Date().format("yyyy-MM-dd HH:mm:ss"))
-    if (device.currentValue("healthStatus") != "online") {
-        sendEvent(name: "healthStatus", value: "online")
-        logTxt "Device back online"
+    if (elapsed > timeout) {
+        if (device.currentValue("healthStatus") != "offline") {
+            sendEvent(name: "healthStatus", value: "offline")
+            log.warn "${device.displayName}: Device offline (no response for ${elapsed}s)"
+        }
+    } else {
+        if (device.currentValue("healthStatus") != "online") {
+            sendEvent(name: "healthStatus", value: "online")
+            logTxt "Device back online"
+        }
     }
 }
 
